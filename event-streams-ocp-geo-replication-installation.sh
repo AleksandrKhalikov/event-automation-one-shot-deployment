@@ -192,12 +192,22 @@ fi
 create_entitlement_secret() {
     NS="$1"
     echo "Creating IBM entitlement secret in ${NS}..."
+    # Check if secret already exists
+    if oc get secret ibm-entitlement-key -n "$NS" >/dev/null 2>&1; then
+        echo "  Secret already exists, updating..."
+        oc -n "$NS" delete secret ibm-entitlement-key >/dev/null 2>&1 || true
+    fi
+    oc -n "$NS" create secret docker-registry ibm-entitlement-key \
+        --docker-server=cp.icr.io \
+        --docker-username=cp \
+        --docker-password="${ENTITLEMENT_KEY}" \
+        --docker-email="na@example.com" >/dev/null 2>&1 || \
     oc -n "$NS" create secret docker-registry ibm-entitlement-key \
         --docker-server=cp.icr.io \
         --docker-username=cp \
         --docker-password="${ENTITLEMENT_KEY}" \
         --docker-email="na@example.com" \
-        --dry-run=client -o yaml | oc -n "$NS" apply -f - >/dev/null
+        --dry-run=client -o yaml | oc -n "$NS" apply -f - >/dev/null 2>&1
     
     # Link secret to service accounts
     for SA in default builder deployer; do

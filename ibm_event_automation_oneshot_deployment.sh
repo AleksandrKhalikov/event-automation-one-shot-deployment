@@ -1055,6 +1055,153 @@ fi
 
 if [ "${INSTALL_ES}" = "true" ]; then
     wait_for_cr "eventstreams" "es-demo" "${NAMESPACE}" || true
+    
+    # Configure Event Streams for UI credential generation
+    echo ""
+    echo "============================================================"
+    echo "Configuring Event Streams for UI Credential Generation"
+    echo "============================================================"
+    
+    CLUSTER_NAME="es-demo"
+    ADMIN_UI_DEPLOYMENT="${CLUSTER_NAME}-ibm-es-ui"
+    SERVICE_ACCOUNT="${CLUSTER_NAME}-ibm-es-ui"
+    ROLE_NAME="${CLUSTER_NAME}-ibm-es-ui"
+    KAFKA_USER="es-admin"
+    
+    # Wait for adminUI deployment to exist
+    echo "Waiting for adminUI deployment to be ready..."
+    for i in 1 2 3 4 5 6 7 8 9 10 11 12; do
+        if oc get deployment "${ADMIN_UI_DEPLOYMENT}" -n "${NAMESPACE}" >/dev/null 2>&1; then
+            echo "✓ AdminUI deployment found"
+            break
+        fi
+        if [ $i -lt 12 ]; then
+            sleep 10
+        fi
+    done
+    
+    # Step 1: Create RBAC permissions for adminUI service account to create KafkaUser resources
+    echo "Creating RBAC permissions for adminUI service account..."
+    oc apply -f - <<EOF >/dev/null 2>&1
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: ${ROLE_NAME}-kafkauser
+  namespace: ${NAMESPACE}
+rules:
+- apiGroups:
+  - eventstreams.ibm.com
+  resources:
+  - kafkausers
+  verbs:
+  - create
+  - get
+  - list
+  - update
+  - patch
+  - delete
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: ${ROLE_NAME}-kafkauser
+  namespace: ${NAMESPACE}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: ${ROLE_NAME}-kafkauser
+subjects:
+- kind: ServiceAccount
+  name: ${SERVICE_ACCOUNT}
+  namespace: ${NAMESPACE}
+EOF
+    echo "✓ RBAC permissions created"
+    
+    # Step 2: Create or update es-admin KafkaUser with explicit permissions
+    echo "Creating es-admin KafkaUser with explicit permissions..."
+    
+    # Check if KafkaUser already exists
+    if oc get kafkauser "${KAFKA_USER}" -n "${NAMESPACE}" >/dev/null 2>&1; then
+        echo "  KafkaUser ${KAFKA_USER} already exists, updating permissions..."
+        # Update to have explicit Alter permission instead of "All"
+        oc patch kafkauser "${KAFKA_USER}" -n "${NAMESPACE}" --type='json' -p='[
+            {
+                "op": "replace",
+                "path": "/spec/authorization/acls/0/operations",
+                "value": ["Alter", "AlterConfigs", "ClusterAction", "Create", "Describe", "DescribeConfigs", "IdempotentWrite"]
+            }
+        ]' >/dev/null 2>&1 || echo "  Note: KafkaUser update may require manual intervention"
+    else
+        echo "  Creating new KafkaUser ${KAFKA_USER}..."
+        oc apply -f - <<EOF >/dev/null 2>&1
+apiVersion: eventstreams.ibm.com/v1beta2
+kind: KafkaUser
+metadata:
+  name: ${KAFKA_USER}
+  namespace: ${NAMESPACE}
+  labels:
+    eventstreams.ibm.com/cluster: ${CLUSTER_NAME}
+spec:
+  authentication:
+    type: scram-sha-512
+  authorization:
+    type: simple
+    acls:
+    - resource:
+        type: cluster
+      operations:
+      - Alter
+      - AlterConfigs
+      - ClusterAction
+      - Create
+      - Describe
+      - DescribeConfigs
+      - IdempotentWrite
+    - resource:
+        type: topic
+        name: "*"
+        patternType: literal
+      operations:
+      - All
+    - resource:
+        type: group
+        name: "*"
+        patternType: literal
+      operations:
+      - All
+    - resource:
+        type: transactionalId
+        name: "*"
+        patternType: literal
+      operations:
+      - All
+EOF
+    fi
+    
+    # Wait for KafkaUser to be ready
+    echo "  Waiting for KafkaUser to be ready..."
+    for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30; do
+        STATUS=$(oc get kafkauser "${KAFKA_USER}" -n "${NAMESPACE}" -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null || echo "")
+        if [ "${STATUS}" = "True" ]; then
+            echo "✓ KafkaUser ${KAFKA_USER} is ready"
+            break
+        fi
+        if [ $i -lt 30 ]; then
+            sleep 2
+        fi
+    done
+    
+    # Step 3: Restart adminAPI to refresh permissions
+    echo "Restarting adminAPI to refresh permissions..."
+    if oc get deployment "${CLUSTER_NAME}-ibm-es-admapi" -n "${NAMESPACE}" >/dev/null 2>&1; then
+        oc rollout restart deployment/"${CLUSTER_NAME}-ibm-es-admapi" -n "${NAMESPACE}" >/dev/null 2>&1
+        echo "✓ AdminAPI restart initiated"
+    else
+        echo "  Note: AdminAPI deployment not found yet, will pick up changes when created"
+    fi
+    
+    echo "✓ Event Streams UI credential generation configured"
+    echo ""
 fi
 
 if [ "${INSTALL_FLINK}" = "true" ] && [ "${INSTALL_EP}" = "true" ]; then
