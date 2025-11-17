@@ -1,4 +1,4 @@
-# IBM Event Automation One-Shot Deployment
+# IBM Event Automation One-Shot Deployment (DON'T USE IN PRODUCTION)
 
 Automated installation script for IBM Cloud Pak for Integration components on OpenShift.
 
