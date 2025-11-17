@@ -650,6 +650,8 @@ spec:
         transaction.state.log.min.isr: 1
         transaction.state.log.replication.factor: 1
         auto.create.topics.enable: false
+        min.insync.replicas: 2
+        default.replication.factor: 3
       listeners:
         - name: plain
           port: 9092
