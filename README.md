@@ -62,8 +62,12 @@ oc get secret integration-admin-initial-temporary-credentials -n ibm-common-serv
 
 ### Event Streams
 ```bash
+# Get UI URL
 oc get route es-demo-ibm-es-ui -n tools -o jsonpath='{.spec.host}'
-# No authentication required by default
+
+# Get SCRAM password for es-admin
+oc get secret es-admin -n tools -o jsonpath='{.data.password}' | base64 -d && echo
+# Username: es-admin
 ```
 
 ### Event Processing
