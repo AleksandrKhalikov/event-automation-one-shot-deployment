@@ -1522,7 +1522,7 @@ if [ "${INSTALL_EEM}" = "true" ]; then
     printf "{\"users\":[{\"username\":\"eem-admin\",\"password\":\"${EEM_ADMIN_PWD}\"}]}" > /tmp/eem-user-credentials.json
     EEM_B64=$(base64 -i /tmp/eem-user-credentials.json 2>/dev/null || base64 /tmp/eem-user-credentials.json | tr -d '\n')
     oc patch secret eem-demo-mgr-ibm-eem-user-credentials -n "${NAMESPACE}" --patch "{\"data\":{\"user-credentials.json\":\"$EEM_B64\"}}" --type=merge 2>/dev/null || echo "  Failed to patch credentials"
-    printf '{"mappings":[{"id":"eem-admin","roles":["author"]}]}' > /tmp/eem-user-roles.json
+    printf '{"mappings":[{"id":"eem-admin","roles":["admin","author"]}]}' > /tmp/eem-user-roles.json
     EEM_ROLE_B64=$(base64 -i /tmp/eem-user-roles.json 2>/dev/null || base64 /tmp/eem-user-roles.json | tr -d '\n')
     oc patch secret eem-demo-mgr-ibm-eem-user-roles -n "${NAMESPACE}" --patch "{\"data\":{\"user-mapping.json\":\"$EEM_ROLE_B64\"}}" --type=merge 2>/dev/null || echo "  Failed to patch role mapping"
     rm -f /tmp/eem-user-credentials.json /tmp/eem-user-roles.json
